@@ -83,6 +83,10 @@ struct Manager
 
     void handleRequest(Method method, ConnectionPtr connection);
 
+    void check_handles(std::promise<void>& promise);
+    void cancel_connections(std::promise<void>& promise,
+                            std::vector<std::future<void>>& futures);
+
     std::map<curl_socket_t, boost::asio::ip::tcp::socket*> sockets;
 
     bool running = true;

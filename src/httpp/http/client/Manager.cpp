@@ -61,6 +61,32 @@ Manager::Manager(UTILS::ThreadPool& io, UTILS::ThreadPool& dispatch)
     manager_setopt(CURLMOPT_TIMERDATA, this);
 }
 
+void Manager::cancel_connections(std::promise<void>& promise,
+                                 std::vector<std::future<void>>& futures)
+{
+    running = false;
+
+    auto conns = current_connections;
+
+    for (auto& conn : conns)
+    {
+        bool expected = false;
+        if (conn.first->cancelled.compare_exchange_strong(expected, true))
+        {
+            BOOST_LOG_TRIVIAL(info) << "Cancel one connection still alive";
+            futures.emplace_back(cancel_connection(conn.first));
+        }
+    }
+
+    promise.set_value();
+}
+
+void Manager::check_handles(std::promise<void>& promise)
+{
+    checkHandles();
+    promise.set_value();
+}
+
 Manager::~Manager()
 {
     std::vector<std::future<void>> futures;
@@ -70,25 +96,11 @@ Manager::~Manager()
 
         BOOST_LOG_TRIVIAL(debug)
             << "Manager::~Manager - Cancel remaining connections";
-        io.dispatch([this, &promise, &futures]
-                    {
-                        running = false;
 
-                        auto conns = current_connections;
-
-                        for (auto& conn : conns)
-                        {
-                            bool expected = false;
-                            if (conn.first->cancelled.compare_exchange_strong(expected, true))
-                            {
-                                BOOST_LOG_TRIVIAL(info)
-                                    << "Cancel one connection still alive";
-                                futures.emplace_back(cancel_connection(conn.first));
-                            }
-                        }
-
-                        promise.set_value();
-                    });
+        io.dispatch(std::bind(&Manager::cancel_connections,
+                              this,
+                              std::ref(promise),
+                              std::ref(futures)));
 
         future.get();
     }
@@ -105,11 +117,7 @@ Manager::~Manager()
     {
         std::promise<void> promise;
         auto future = promise.get_future();
-        io.dispatch([this, &promise]
-                    {
-                        checkHandles();
-                        promise.set_value();
-                    });
+        io.dispatch(std::bind(&Manager::check_handles, this, std::ref(promise)));
         future.get();
     }
 
