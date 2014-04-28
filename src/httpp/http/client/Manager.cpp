@@ -68,6 +68,8 @@ Manager::~Manager()
         std::promise<void> promise;
         auto future = promise.get_future();
 
+        BOOST_LOG_TRIVIAL(debug)
+            << "Manager::~Manager - Cancel remaining connections";
         io.dispatch([this, &promise, &futures]
                     {
                         running = false;
@@ -98,6 +100,8 @@ Manager::~Manager()
         futures.pop_back();
     }
 
+    BOOST_LOG_TRIVIAL(debug)
+        << "Manager::~Manager - Connections cancelled, clean handles";
     {
         std::promise<void> promise;
         auto future = promise.get_future();
@@ -108,16 +112,22 @@ Manager::~Manager()
                     });
         future.get();
     }
+
+    BOOST_LOG_TRIVIAL(debug)
+        << "Manager::~Manager - Handles cleaned";
     stop();
 }
 
 void Manager::stop()
 {
+    BOOST_LOG_TRIVIAL(debug) << "Manager::~Manager - Cancel timer";
+
     boost::system::error_code ec;
     timer.cancel(ec);
 
     if (handler)
     {
+        BOOST_LOG_TRIVIAL(debug) << "Manager::~Manager - curl handle free'd";
         curl_multi_cleanup(handler);
         handler = nullptr;
     }
@@ -128,6 +138,8 @@ void Manager::stop()
             << "There are still curl socket opened: " << sockets.size() << ", "
             << current_connections.size();
     }
+
+    BOOST_LOG_TRIVIAL(debug) << "Manager::~Manager - Stopped";
 }
 
 void Manager::timer_cb(const boost::system::error_code& error)

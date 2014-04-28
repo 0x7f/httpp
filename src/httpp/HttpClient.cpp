@@ -43,6 +43,8 @@ HttpClient::HttpClient(size_t nb_thread, const std::string& name)
 
 HttpClient::~HttpClient()
 {
+    BOOST_LOG_TRIVIAL(info)
+        << "Destroying HttpClient";
     manager.reset();
     pool_io_.stop();
     pool_dispatch_.stop();
